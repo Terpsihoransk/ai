@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration scan="true" scanPeriod="30 seconds">
 
+    <!-- Обрезаем слишком длинные сообщения: тела запроса/ответа модели не должны забивать лог -->
+    <conversionRule conversionWord="msg"
+                    converterClass="ru.ars.ai.logging.TruncatedMessageConverter"/>
+
     <!-- Значения из application.properties -->
     <springProperty scope="context" name="APP_NAME" source="spring.application.name" defaultValue="ai"/>
     <springProperty scope="context" name="ROOT_LEVEL" source="logging.level.root" defaultValue="INFO"/>
@@ -8,7 +12,7 @@
 
     <!-- Единый формат вывода: время | уровень | поток | логгер | сообщение -->
     <property name="LOG_PATTERN"
-              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{40} - %msg%n"/>
+              value="%d{yyyy-MM-dd HH:mm:ss} %-5level [%thread] %logger{40} - %msg%n"/>
 
     <!-- Вывод в консоль -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
