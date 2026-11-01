@@ -32,6 +32,7 @@
 | Vector store    | pgvector (`spring-ai-starter-vector-store-pgvector`)         |
 | БД              | PostgreSQL 15+ с расширением `pgvector` (образ `ankane/pgvector`) |
 | ORM             | Spring Data JPA / Hibernate                                  |
+| Миграции БД     | Flyway (`spring-boot-starter-flyway`, миграции в `db/migration`) |
 | UI              | Thymeleaf + ванильный JS + [marked.js](https://marked.js.org/) |
 | Стриминг        | Spring MVC `SseEmitter` ← мост из `Flux<String>`             |
 | Сборка          | Maven (wrapper в `./mvnw`)                                   |
@@ -51,23 +52,33 @@
                                              │  → ChatClient.prompt │
                                              └────────┬─────────────┘
                                                       │
-             ┌────────────────────────────────────────┤
-             ▼                                        ▼
-   ┌──────────────────┐                   ┌─────────────────────────┐
-   │ MessageChatMemory│ (advisor Spring AI)│   Ollama (localhost)   │
-   │     Advisor      │                   │  gemma3:4b-it-q4_K_M    │
-   └────────┬─────────┘                   └─────────────────────────┘
-            │ read / write
-            ▼
-   ┌──────────────────┐                   ┌─────────────────────────┐
-   │PostgresChatMemory│ ───── JPA ─────▶  │  PostgreSQL + pgvector  │
-   │ (ChatMemory impl)│                   │  (Chat / ChatEntry)     │
-   └──────────────────┘                   └─────────────────────────┘
+              ┌───────────────────────────────────────┤
+              ▼                                       ▼
+   ┌──────────────────┐                    ┌─────────────────────────┐
+   │ MessageChatMemory│ ─── история ───▶   │   Ollama (localhost)    │
+   │     Advisor      │                    │  gemma3:4b-it-q4_K_M    │
+   └────────┬─────────┘                    └─────────────────────────┘
+            │ read / write                              ▲
+            ▼                                           │ topK чанков
+   ┌──────────────────┐                    ┌────────────┴────────────┐
+   │PostgresChatMemory│                    │   QuestionAnswerAdvisor │
+   │ (ChatMemory impl)│                    │      (RAG, Spring AI)   │
+   └────────┬─────────┘                    └────────────┬────────────┘
+            │ JPA                                       │ similarity search
+            └──────────────────┬────────────────────────┘
+                               ▼
+                  ┌─────────────────────────┐
+                  │  PostgreSQL + pgvector  │
+                  │  Chat / ChatEntry ·     │
+                  │  vector_store           │
+                  └─────────────────────────┘
 ```
 
 Ключевые идеи:
 
 - **История не дублируется** между Spring AI и приложением. Собственная реализация [`PostgresChatMemory`](src/main/java/ru/ars/ai/memory/PostgresChatMemory.java) пишет и читает те же таблицы `Chat`/`ChatEntry`, что отображает UI.
+- **RAG-советник** [`QuestionAnswerAdvisor`](src/main/java/ru/ars/ai/AiApplication.java) подмешивает в промпт `topK` ближайших чанков из `vector_store` (наполняется [`DocumentLoaderService`](src/main/java/ru/ars/ai/service/DocumentLoaderService.java)). Промпт мягкий: если в контексте нет ответа, модель отвечает по своим знаниям.
+- **Порядок advisor'ов** задан явно: память (`order=-10`) применяется раньше RAG (`order=0`).
 - **Стриминг**: [`ChatStreamService`](src/main/java/ru/ars/ai/service/ChatStreamService.java) отдаёт сырой `Flux<String>`, а [`SseStreamBridge`](src/main/java/ru/ars/ai/util/SseStreamBridge.java) конвертирует его в `SseEmitter`, корректно отменяя подписку при разрыве клиента.
 - **Промпт в теле POST**, а не в query string: длинный пользовательский ввод не влезает в лимит заголовков Tomcat (8 КБ по умолчанию).
 - **Markdown** в ответах рендерится на фронте через `marked.js` — и для стриминговых токенов, и для истории.
@@ -93,6 +104,8 @@ docker compose up -d
 - запустится **Ollama** на `localhost:11431`, автоматически подтянутся модели `gemma3:4b-it-q4_K_M` и `mxbai-embed-large`.
 
 > ⚠️ Первый запуск скачивает несколько гигабайт моделей — наберитесь терпения. Прогресс виден в `docker compose logs -f ollama`.
+
+> ⚠️ Схема БД создаётся приложением, а не скриптами контейнера: при старте **Flyway** накатывает миграции из `src/main/resources/db/migration`, затем Hibernate проверяет соответствие схемы (`ddl-auto=validate`).
 
 ### 2. Запустить приложение
 
@@ -135,10 +148,14 @@ java -jar target/ai-0.0.1-SNAPSHOT.jar
 | `spring.ai.ollama.chat.model`        | `gemma3:4b-it-q4_K_M`                | Модель для чата                                                  |
 | `spring.datasource.url`              | `jdbc:postgresql://localhost:5433/ragdb` | Подключение к PostgreSQL                                     |
 | `spring.datasource.username` / `password` | `postgres` / `postgres`         | Креденшилы БД                                                    |
-| `spring.jpa.hibernate.ddl-auto`      | `update`                             | Hibernate сам создаёт/мигрирует схему                            |
-| `chat.memory.max-messages`           | `20` (значение из кода)              | Размер скользящего окна истории, отдаваемой модели               |
+| `spring.jpa.hibernate.ddl-auto`      | `validate`                           | Hibernate только проверяет соответствие схемы, но не меняет её   |
+| `spring.flyway.enabled`              | `true`                               | Схема создаётся и обновляется миграциями Flyway                  |
+| `spring.flyway.baseline-on-migrate`  | `true` (`baseline-version=0`)        | Накат миграций на уже существующую БД без `flyway_schema_history` |
+| `spring.ai.vectorstore.pgvector.initialize-schema` | `false`                | Таблицей `vector_store` владеет Flyway                           |
+| `chat.memory.max-messages`           | `12`                                 | Размер скользящего окна истории, отдаваемой модели               |
+| `rag.advisor.top-k`                  | `4`                                  | Сколько ближайших чанков из `vector_store` подмешивать в промпт  |
 
-> Для продакшена `ddl-auto=update` и хардкод кредов — не вариант. Для локалки удобно.
+> Для продакшена хардкод кредов — не вариант; схему БД держим только в миграциях Flyway, а не в `ddl-auto`. Для локалки удобно.
 
 ## HTTP API
 
@@ -167,12 +184,13 @@ data:
 
 ```
 src/main/java/ru/ars/ai/
-├── AiApplication.java            # Точка входа + бин ChatClient с MessageChatMemoryAdvisor
+├── AiApplication.java            # Точка входа + бин ChatClient (MessageChatMemoryAdvisor + QuestionAnswerAdvisor)
 ├── controller/
 │   └── ChatController.java       # Thymeleaf-страницы + SSE-эндпоинт
 ├── service/
 │   ├── ChatService.java          # CRUD чатов для UI
-│   └── ChatStreamService.java    # Flux<String> от модели (через ChatClient)
+│   ├── ChatStreamService.java    # Flux<String> от модели (через ChatClient)
+│   └── DocumentLoaderService.java # Загрузка knowledgebase/*.txt в vector_store (CommandLineRunner)
 ├── memory/
 │   └── PostgresChatMemory.java   # ChatMemory поверх таблиц приложения
 ├── model/
@@ -191,6 +209,7 @@ src/main/java/ru/ars/ai/
 
 src/main/resources/
 ├── application.properties
+├── db/migration/V1__init.sql     # Схема БД (владелец — Flyway)
 ├── logback-spring.xml            # Единый формат, фильтры SQL
 ├── static/
 │   ├── css/chat.css              # Comic-style UI
