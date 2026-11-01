@@ -25,9 +25,7 @@ postgres/
 servers.json/
 
 ### Other ###
-docker-compose.yml
 .gitattributes
 ai.iml
 mvnw.cmd
 mvnw
-**/src/main/resources/application.properties
