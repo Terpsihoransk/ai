@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="30 seconds">
+
+    <!-- Значения из application.properties -->
+    <springProperty scope="context" name="APP_NAME" source="spring.application.name" defaultValue="ai"/>
+    <springProperty scope="context" name="ROOT_LEVEL" source="logging.level.root" defaultValue="INFO"/>
+    <springProperty scope="context" name="APP_LEVEL" source="logging.level.ru.ars.ai" defaultValue="DEBUG"/>
+
+    <!-- Единый формат вывода: время | уровень | поток | логгер | сообщение -->
+    <property name="LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{40} - %msg%n"/>
+
+    <!-- Вывод в консоль -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- Консоль для SQL-привязок параметров: шумные BIGINT (id) отбрасываются, полезные значения остаются -->
+    <appender name="CONSOLE_BIND" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <filter class="ru.ars.ai.logging.HideBigIntJdbcLogFilter"/>
+    </appender>
+
+    <!-- Логи приложения -->
+    <logger name="ru.ars.ai" level="${APP_LEVEL}"/>
+
+    <!-- SQL и параметры Hibernate -->
+    <logger name="org.hibernate.SQL" level="DEBUG"/>
+    <logger name="org.hibernate.orm.jdbc.bind" level="TRACE" additivity="false">
+        <appender-ref ref="CONSOLE_BIND"/>
+    </logger>
+    <!-- Извлечение значений из результата запроса — чистый шум, отключено -->
+    <logger name="org.hibernate.orm.jdbc.extract" level="OFF"/>
+
+    <!-- Spring AI -->
+    <logger name="org.springframework.ai" level="DEBUG"/>
+    <!-- Метаданные ответа модели шумят на DEBUG ("Ignore null value for key ...") — подавляем -->
+    <logger name="org.springframework.ai.chat.metadata" level="INFO"/>
+
+    <!-- Веб-слой -->
+    <logger name="org.springframework.web" level="INFO"/>
+
+    <!-- Корневой логгер: вывод только в консоль -->
+    <root level="${ROOT_LEVEL}">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+</configuration>
