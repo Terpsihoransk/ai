@@ -1,11 +1,9 @@
 package ru.ars.ai.memory;
 
-import lombok.RequiredArgsConstructor;
+import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.Message;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import ru.ars.ai.model.Chat;
 import ru.ars.ai.model.ChatEntry;
@@ -27,15 +25,16 @@ import java.util.List;
  * {@link Chat#getHistory()} инициализировалась внутри транзакции.
  */
 @Slf4j
-@Component
-@RequiredArgsConstructor
+@Builder
 public class PostgresChatMemory implements ChatMemory {
 
     private final ChatRepository chatRepository;
 
-    /** Сколько последних сообщений отдавать модели в качестве контекста. */
-    @Value("${chat.memory.max-messages:20}")
-    private int maxMessages;
+    /**
+     * Сколько последних сообщений отдавать модели в качестве контекста.
+     * Настраивается через builder при объявлении бина {@code ChatMemory}.
+     */
+    private final int maxMessages;
 
     /**
      * Переопределяем default-метод интерфейса, чтобы вызов из advisor'а гарантированно проходил
