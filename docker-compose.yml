@@ -15,7 +15,6 @@ services:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./postgres/scripts:/docker-entrypoint-initdb.d
     healthcheck:
       test: "pg_isready -U postgres -d ragdb"
       interval: 2s

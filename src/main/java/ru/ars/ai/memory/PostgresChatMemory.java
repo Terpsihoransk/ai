@@ -49,7 +49,7 @@ public class PostgresChatMemory implements ChatMemory {
     @Override
     @Transactional
     public void add(String conversationId, List<Message> messages) {
-        if (messages == null || messages.isEmpty()) {
+        if (messages.isEmpty()) {
             return;
         }
         Chat chat = loadChat(conversationId);

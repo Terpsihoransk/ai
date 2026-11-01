@@ -36,13 +36,12 @@ public enum Role {
         }
     };
 
-    /** Отображаемое имя роли, используется в шаблонах. */
     private final String role;
 
-    /** Создаёт сообщение модели, соответствующее этой роли. */
+    // Создаёт сообщение модели, соответствующее этой роли
     abstract Message getMessage(String content);
 
-    /** Роль по типу сообщения модели. */
+    // Роль по типу сообщения модели
     public static Role fromMessageType(MessageType messageType) {
         return switch (messageType) {
             case USER -> USER;

@@ -42,12 +42,12 @@ public class ChatEntry {
     @CreationTimestamp
     private LocalDateTime startedAt;
 
-    /** Преобразует запись истории в сообщение для модели. */
+    // Преобразует запись истории в сообщение для модели
     public Message toMessage() {
         return role.getMessage(content);
     }
 
-    /** Преобразует сообщение модели в запись истории. */
+    // Преобразует сообщение модели в запись истории
     public static ChatEntry toChatEntry(Message message) {
         return ChatEntry.builder()
                 .role(Role.fromMessageType(message.getMessageType()))

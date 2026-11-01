@@ -1,6 +1,7 @@
 package ru.ars.ai.util;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.Disposable;
@@ -20,14 +21,15 @@ import java.io.IOException;
 @Component
 public class SseStreamBridge {
 
-    /** Таймаут SSE-соединения, мс. */
-    private static final long SSE_TIMEOUT_MS = 300_000L;
+    // Таймаут SSE-соединения, мс. Значение задаётся свойством sse.timeout-ms
+    @Value("${sse.timeout-ms:300000}")
+    private long sseTimeoutMs;
 
-    /** Имя события, сигнализирующего клиенту о завершении стрима. */
+    // Имя события, сигнализирующего клиенту о завершении стрима
     private static final String DONE_EVENT = "done";
 
     public SseEmitter toEmitter(Flux<String> tokens) {
-        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
+        SseEmitter emitter = new SseEmitter(sseTimeoutMs);
         // Swap позволяет отменить подписку из колбэка, даже если он сработал раньше,
         // чем subscribe() вернул Disposable.
         Disposable.Swap subscription = Disposables.swap();
@@ -40,7 +42,7 @@ public class SseStreamBridge {
                 ));
         emitter.onCompletion(subscription::dispose);
         emitter.onTimeout(() -> {
-            log.warn("SSE-соединение закрыто по таймауту {} мс", SSE_TIMEOUT_MS);
+            log.warn("SSE-соединение закрыто по таймауту {} мс", sseTimeoutMs);
             subscription.dispose();
         });
         return emitter;

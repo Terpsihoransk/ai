@@ -29,6 +29,7 @@
 | Lombok           | подключён, аннотации используются повсеместно             |
 | LLM              | Ollama, модель `gemma3:4b-it-q4_K_M`                      |
 | БД               | PostgreSQL 15+ с pgvector (`ankane/pgvector:v0.5.0`)      |
+| Миграции БД      | Flyway (`spring-boot-starter-flyway`), каталог `db/migration` |
 | Шаблонизатор     | Thymeleaf                                                 |
 | JS-рендер MD     | `marked.js` (CDN, подключён в `chat.html`)                |
 
@@ -78,8 +79,13 @@
 
 ### Миграции схемы
 
-- Пока используется `spring.jpa.hibernate.ddl-auto=update` — Hibernate сам синхронизирует схему. Flyway/Liquibase не подключены. 
-**Если ломаешь обратную совместимость схемы — предупреди пользователя** и предложи SQL для существующих БД.
+- **Схемой владеет Flyway, а не Hibernate.** Миграции лежат в [`src/main/resources/db/migration`](src/main/resources/db/migration) (`V1__init.sql` и далее) и накатываются при старте приложения.
+- `spring.jpa.hibernate.ddl-auto=validate` — Hibernate только проверяет соответствие entity и схемы, ничего не создаёт и не меняет. **Не возвращай `update`/`create`.**
+- Любое изменение схемы — **новой миграцией** `V{N}__описание.sql`. Не правь уже применённые миграции (Flyway хранит контрольные суммы).
+- **Не создавай таблицы через `docker-entrypoint-initdb.d`**: этот каталог выполняется лишь при первой инициализации пустого тома. `postgres/scripts/01-create-tables.sql` намеренно оставлен только для создания расширения `vector`.
+- `vector_store` создаётся миграцией; Spring AI запускается с `spring.ai.vectorstore.pgvector.initialize-schema=false`, а `id-type=text` согласован с типом колонки `id`.
+- Для уже существующих БД включены `spring.flyway.baseline-on-migrate=true` и `baseline-version=0`, а операторы в `V1` идемпотентны (`IF NOT EXISTS`).
+- **Если ломаешь обратную совместимость схемы — предупреди пользователя** и добавь миграцию, совместимую с существующими данными.
 
 ### JPA
 
@@ -114,6 +120,7 @@
 - ❌ Не вводи английский в комментарии/логи/javadoc, если рядом стоит русский стиль.
 - ❌ Не подключай фронтенд-фреймворки (React/Vue) — проект осознанно простой.
 - ❌ Не коммить секреты (пока их и нет: креды в `application.properties` — для локалки).
+- ❌ Не создавай и не меняй таблицы вне Flyway-миграций и не включай `ddl-auto=update`: источник правды схемы — только `db/migration`.
 
 ## 8. Полезные ссылки на код
 
@@ -123,6 +130,7 @@
 - Чтение/запись истории чата: [`PostgresChatMemory`](src/main/java/ru/ars/ai/memory/PostgresChatMemory.java)
 - Эндпоинт стрима: [`ChatController.streamChat()`](src/main/java/ru/ars/ai/controller/ChatController.java:63)
 - Парсер SSE на клиенте: [`readEventStream()`](src/main/resources/static/js/chat.js:29)
+- Схема БД (миграции): [`V1__init.sql`](src/main/resources/db/migration/V1__init.sql)
 
 ## 9. Коммуникация с пользователем
 
