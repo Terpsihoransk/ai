@@ -16,10 +16,6 @@ import ru.ars.ai.service.ChatService;
 import ru.ars.ai.service.ChatStreamService;
 import ru.ars.ai.util.SseStreamBridge;
 
-/**
- * MVC-контроллер. Транспортная часть SSE живёт здесь, а не в сервисе —
- * сервис отдаёт обычный поток токенов.
- */
 @Slf4j
 @Controller
 @RequiredArgsConstructor
@@ -50,7 +46,6 @@ public class ChatController {
         return "redirect:/chat/" + chat.getId();
     }
 
-    /** Форма в шаблоне отправляет POST, поэтому именно POST — иначе кнопка удаления не работала. */
     @PostMapping("/chat/{chatId}/delete")
     public String deleteChat(@PathVariable Long chatId) {
         chatService.deleteChat(chatId);

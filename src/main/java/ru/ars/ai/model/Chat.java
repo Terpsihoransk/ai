@@ -19,12 +19,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Чат пользователя с историей сообщений.
- * <p>
- * {@code @Data} сознательно не используется: сгенерированные equals/hashCode/toString по всем полям
- * приводили бы к бесконечной рекурсии из-за двунаправленной связи с {@link ChatEntry}.
- */
 @Entity
 @Getter
 @Setter
