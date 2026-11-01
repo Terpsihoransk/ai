@@ -13,6 +13,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.springframework.ai.chat.messages.Message;
 
 import java.time.LocalDateTime;
 
@@ -40,5 +41,18 @@ public class ChatEntry {
 
     @CreationTimestamp
     private LocalDateTime startedAt;
+
+    /** Преобразует запись истории в сообщение для модели. */
+    public Message toMessage() {
+        return role.getMessage(content);
+    }
+
+    /** Преобразует сообщение модели в запись истории. */
+    public static ChatEntry toChatEntry(Message message) {
+        return ChatEntry.builder()
+                .role(Role.fromMessageType(message.getMessageType()))
+                .content(message.getText())
+                .build();
+    }
 
 }
